@@ -16,10 +16,24 @@ export interface LearningMaterials {
  * Extract learning materials from the in-session transcript.
  *
  * - dialog: every non-empty user/assistant line, in order.
- * - words: unique, lowercased English words spoken by Buddy (the teacher),
- *   sorted alphabetically. This gives a basic word list; it can later be
- *   upgraded to an LLM-curated list.
+ * - words: a curated vocabulary list — only "key" content words spoken by
+ *   Buddy (the teacher), with common function words (the, is, I, you, ...) and
+ *   very short words removed, then de-duplicated and sorted. This keeps the
+ *   word list focused on the vocabulary a child should learn, not every word
+ *   in a sentence.
  */
+const STOPWORDS = new Set([
+  "the", "a", "an", "and", "or", "but", "to", "of", "in", "on", "at", "for",
+  "with", "is", "am", "are", "was", "were", "be", "been", "being", "i", "you",
+  "he", "she", "it", "we", "they", "me", "my", "your", "his", "her", "our",
+  "their", "this", "that", "these", "those", "do", "does", "did", "can",
+  "will", "would", "should", "could", "have", "has", "had", "not", "no",
+  "yes", "what", "who", "where", "when", "how", "why", "hello", "hi", "hey",
+  "good", "great", "nice", "okay", "ok", "please", "thanks", "thank", "like",
+  "love", "very", "so", "too", "just", "now", "here", "there", "let", "us",
+  "get", "got", "want", "see", "look", "come"
+]);
+
 export function buildLearningMaterials(
   transcript: TranscriptMessage[]
 ): LearningMaterials {
@@ -34,7 +48,9 @@ export function buildLearningMaterials(
       .toLowerCase()
       .replace(/[^a-z\s]/g, " ")
       .split(/\s+/)
-      .filter((w) => w.length >= 2 && /^[a-z]+$/.test(w));
+      .filter(
+        (w) => w.length >= 3 && /^[a-z]+$/.test(w) && !STOPWORDS.has(w)
+      );
     for (const w of words) wordSet.add(w);
   }
 

@@ -2,7 +2,6 @@ import { useVoiceAgent, type VoiceStatus } from "agents/voice/react";
 import { VoiceClient } from "agents/voice/client";
 import {
   MicrophoneIcon,
-  MicrophoneSlashIcon,
   PhoneIcon,
   PhoneDisconnectIcon,
   WaveformIcon,
@@ -25,7 +24,16 @@ import {
   Text,
   PoweredByCloudflare
 } from "@cloudflare/kumo";
-import { useEffect, useRef, useState, useCallback } from "react";
+import {
+  useEffect,
+  useRef,
+  useState,
+  useCallback
+} from "react";
+import type {
+  PointerEvent as ReactPointerEvent,
+  CSSProperties
+} from "react";
 import { useSFUVoice } from "./use-sfu-voice";
 import {
   DEFAULT_STT_SETTINGS,
@@ -113,6 +121,69 @@ function ModeToggle() {
   );
 }
 
+// --- Push-to-Talk button ---
+// The mic is MUTED by default during a call. The child holds this button to
+// unmute (audio flows to ASR), and releases to re-mute. Because Workers AI
+// Flux STT is billed by audio duration, this stops idle "listening" from
+// burning neurons and makes the cost predictable: you only pay for the
+// seconds the child actually holds the button.
+
+function PushToTalkButton({
+  disabled,
+  onPressStart,
+  onPressEnd
+}: {
+  disabled: boolean;
+  onPressStart: () => void;
+  onPressEnd: () => void;
+}) {
+  const [pressed, setPressed] = useState(false);
+  const pressedRef = useRef(false);
+
+  const start = (e: ReactPointerEvent<HTMLButtonElement>) => {
+    if (disabled || pressedRef.current) return;
+    e.preventDefault();
+    try {
+      e.currentTarget.setPointerCapture(e.pointerId);
+    } catch {
+      /* pointer capture is best-effort */
+    }
+    pressedRef.current = true;
+    setPressed(true);
+    onPressStart();
+  };
+
+  const end = (e: ReactPointerEvent<HTMLButtonElement>) => {
+    if (!pressedRef.current) return;
+    e.preventDefault();
+    pressedRef.current = false;
+    setPressed(false);
+    onPressEnd();
+  };
+
+  return (
+    <button
+      type="button"
+      className={`ptt-button${pressed ? " ptt-button--active" : ""}`}
+      disabled={disabled}
+      onPointerDown={start}
+      onPointerUp={end}
+      onPointerLeave={end}
+      onPointerCancel={end}
+      onContextMenu={(e) => e.preventDefault()}
+      style={{ touchAction: "none", userSelect: "none" } as CSSProperties}
+    >
+      <span className="ptt-icon">
+        <MicrophoneIcon size={30} weight="fill" />
+      </span>
+      <span className="ptt-label">{pressed ? "正在说话…" : "按住说话"}</span>
+      <span className="ptt-hint">
+        {pressed ? "松手就结束" : "长按开始 · 松手结束"}
+      </span>
+    </button>
+  );
+}
+
 // --- WebRTC (SFU) Mode ---
 
 type LlmModel = "kimi" | "glm" | "gpt-oss-20b";
@@ -161,16 +232,28 @@ function WebRTCApp({
 
   // Restart the call when the language mode changes, so the new prompt applies.
   const prevLangRef = useRef(lang);
+  // When a call (re)starts, force it into the muted state so no audio is sent
+  // to ASR until the child presses the push-to-talk button.
+  const needsInitialMuteRef = useRef(false);
   useEffect(() => {
     if (prevLangRef.current !== lang) {
       prevLangRef.current = lang;
       if (status !== "idle") {
         endCall();
+        needsInitialMuteRef.current = true;
         const t = window.setTimeout(() => startCall(), 500);
         return () => window.clearTimeout(t);
       }
     }
   }, [lang]);
+
+  // Ensure a freshly-started call begins muted (push-to-talk default).
+  useEffect(() => {
+    if (needsInitialMuteRef.current && isInCall && !isMuted) {
+      needsInitialMuteRef.current = false;
+      toggleMute();
+    }
+  }, [isInCall, isMuted, toggleMute]);
 
   const transcriptEndRef = useRef<HTMLDivElement>(null);
   const [textInput, setTextInput] = useState("");
@@ -182,6 +265,22 @@ function WebRTCApp({
   const isInCall = status !== "idle";
   const statusDisplay = getStatusDisplay(status);
   const StatusIcon = statusDisplay.icon;
+
+  const handleStartCallWebRTC = useCallback(async () => {
+    needsInitialMuteRef.current = true;
+    await startCall();
+  }, [startCall]);
+
+  // Press-to-talk: hold to unmute (audio → ASR), release to re-mute.
+  const handlePttStart = useCallback(() => {
+    if (!isMuted) return;
+    toggleMute();
+  }, [isMuted, toggleMute]);
+
+  const handlePttEnd = useCallback(() => {
+    if (isMuted) return;
+    toggleMute();
+  }, [isMuted, toggleMute]);
 
   return (
     <>
@@ -274,10 +373,12 @@ function WebRTCApp({
             className={status === "thinking" ? "animate-spin" : ""}
           />
           <span className={`text-lg ${statusDisplay.color}`}>
-            {statusDisplay.text}
+            {isInCall && isMuted && status === "listening"
+              ? "按住说话 🎤"
+              : statusDisplay.text}
           </span>
         </div>
-        {isInCall && status === "listening" && (
+        {isInCall && status === "listening" && !isMuted && (
           <div className="mt-2 h-1.5 bg-kumo-fill rounded-full overflow-hidden">
             <div
               className="h-full bg-kumo-success rounded-full transition-all duration-75"
@@ -354,10 +455,10 @@ function WebRTCApp({
       </Surface>
 
       {/* Controls */}
-      <div className="flex items-center justify-center gap-4">
+      <div className="flex flex-col items-center justify-center gap-3 sm:flex-row">
         {!isInCall ? (
           <Button
-            onClick={startCall}
+            onClick={handleStartCallWebRTC}
             className="px-8 justify-center buddy-big-btn"
             variant="primary"
             disabled={!connected}
@@ -367,19 +468,10 @@ function WebRTCApp({
           </Button>
         ) : (
           <>
-            <Button
-              onClick={toggleMute}
-              variant={isMuted ? "destructive" : "secondary"}
-              icon={
-                isMuted ? (
-                  <MicrophoneSlashIcon size={20} weight="fill" />
-                ) : (
-                  <MicrophoneIcon size={20} weight="fill" />
-                )
-              }
-            >
-              {isMuted ? "Unmute" : "Mute"}
-            </Button>
+            <PushToTalkButton
+              onPressStart={handlePttStart}
+              onPressEnd={handlePttEnd}
+            />
             <Button
               onClick={endCall}
               variant="destructive"
@@ -467,16 +559,28 @@ function App() {
   // When the language mode changes and a call is active, restart the call so
   // the new system prompt (English teaching vs. Chinese explanation) takes effect.
   const prevLangRef = useRef(lang);
+  // When a call (re)starts, force it into the muted state so no audio is sent
+  // to ASR until the child presses the push-to-talk button.
+  const needsInitialMuteRef = useRef(false);
   useEffect(() => {
     if (prevLangRef.current !== lang) {
       prevLangRef.current = lang;
       if (status !== "idle") {
         endCall();
+        needsInitialMuteRef.current = true;
         const t = window.setTimeout(() => startCall(), 500);
         return () => window.clearTimeout(t);
       }
     }
   }, [lang]);
+
+  // Ensure a freshly-started call begins muted (push-to-talk default).
+  useEffect(() => {
+    if (needsInitialMuteRef.current && isInCall && !isMuted) {
+      needsInitialMuteRef.current = false;
+      toggleMute();
+    }
+  }, [isInCall, isMuted, toggleMute]);
 
   const toggleLang = useCallback(() => {
     setLang((prev) => (prev === "en" ? "zh" : "en"));
@@ -550,9 +654,21 @@ function App() {
   }, [transcript, interimTranscript]);
 
   const handleStartCall = useCallback(async () => {
+    needsInitialMuteRef.current = true;
     await startCall();
     await refreshAudioOutputs().catch(() => {});
   }, [refreshAudioOutputs, startCall]);
+
+  // Press-to-talk: hold to unmute (audio → ASR), release to re-mute.
+  const handlePttStart = useCallback(() => {
+    if (!isMuted) return;
+    toggleMute();
+  }, [isMuted, toggleMute]);
+
+  const handlePttEnd = useCallback(() => {
+    if (isMuted) return;
+    toggleMute();
+  }, [isMuted, toggleMute]);
 
   // Detect speaker conflict from error messages
   useEffect(() => {
@@ -841,7 +957,7 @@ function App() {
             </span>
           </div>
           {/* Audio level meter */}
-          {isInCall && status === "listening" && (
+          {isInCall && status === "listening" && !isMuted && (
             <div className="mt-2 h-1.5 bg-kumo-fill rounded-full overflow-hidden">
               <div
                 className="h-full bg-kumo-success rounded-full transition-all duration-75"
@@ -963,19 +1079,10 @@ function App() {
             </Button>
           ) : (
             <>
-              <Button
-                onClick={toggleMute}
-                variant={isMuted ? "destructive" : "secondary"}
-                icon={
-                  isMuted ? (
-                    <MicrophoneSlashIcon size={20} weight="fill" />
-                  ) : (
-                    <MicrophoneIcon size={20} weight="fill" />
-                  )
-                }
-              >
-                {isMuted ? "Unmute" : "Mute"}
-              </Button>
+              <PushToTalkButton
+                onPressStart={handlePttStart}
+                onPressEnd={handlePttEnd}
+              />
               <Button
                 onClick={endCall}
                 variant="destructive"

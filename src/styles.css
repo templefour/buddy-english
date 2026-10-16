@@ -36,3 +36,53 @@
   font-size: 1.25rem;
   line-height: 1.9;
 }
+
+/* ===== Push-to-talk button =====
+   Large, finger-friendly. Idle = indigo "press me"; while held it turns red
+   ("recording") so the child gets instant feedback that audio is flowing. */
+.ptt-button {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.15rem;
+  min-width: 13rem;
+  min-height: 6.5rem;
+  padding: 1rem 1.5rem;
+  border: none;
+  border-radius: 1.75rem;
+  background: linear-gradient(160deg, #6366f1 0%, #4f46e5 100%);
+  color: #fff;
+  cursor: pointer;
+  box-shadow: 0 10px 30px rgba(79, 70, 229, 0.35);
+  transition: transform 0.08s ease, box-shadow 0.12s ease, background 0.12s ease;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.ptt-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.ptt-button:active,
+.ptt-button--active {
+  background: linear-gradient(160deg, #ef4444 0%, #dc2626 100%);
+  box-shadow: 0 6px 20px rgba(220, 38, 38, 0.45);
+  transform: scale(0.97);
+}
+
+.ptt-icon {
+  display: flex;
+  line-height: 1;
+}
+
+.ptt-label {
+  font-size: 1.5rem;
+  font-weight: 800;
+}
+
+.ptt-hint {
+  font-size: 0.85rem;
+  font-weight: 500;
+  opacity: 0.85;
+}

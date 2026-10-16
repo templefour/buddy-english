@@ -9,7 +9,7 @@ import {
   type VoiceTurnContext,
   type Transcriber
 } from "agents/voice";
-import { streamText, tool, isStepCount } from "ai";
+import { generateText, tool } from "ai";
 import { createWorkersAI } from "workers-ai-provider";
 import { z } from "zod";
 import {
@@ -190,6 +190,8 @@ Always follow these rules:
   // --- Voice agent logic ---
 
   async onTurn(transcript: string, context: VoiceTurnContext) {
+    console.log("[onTurn] received transcript:", transcript);
+
     const workersAi = createWorkersAI({ binding: this.env.AI });
 
     const url = new URL(context.connection.uri ?? "http://localhost");
@@ -202,7 +204,11 @@ Always follow these rules:
           ? "@cf/openai/gpt-oss-20b"
           : "@cf/zai-org/glm-4.7-flash";
 
-    const result = streamText({
+    // Make sure the bilingual TTS speaks this reply in the right language.
+    (this.tts as BilingualTTS).setLang(lang);
+
+    try {
+      const { text } = await generateText({
       model: workersAi(llmModel as Parameters<typeof workersAi>[0], {
         sessionAffinity: this.sessionAffinity
       }),
@@ -292,11 +298,31 @@ Always follow these rules:
           }
         })
       },
-      stopWhen: isStepCount(3),
+      maxSteps: 3,
       abortSignal: context.signal
     });
 
-    return result.stream;
+      console.log("[onTurn] generated reply:", text);
+      await this.speak(context.connection, text);
+    } catch (err) {
+      console.error("[onTurn] LLM call failed:", err);
+      // Don't leave the agent stuck on "listening" forever. Speak a friendly
+      // fallback and return an empty stream so the pipeline recovers.
+      try {
+        const fallback =
+          lang === "zh"
+            ? "哎呀，我刚才没听清。你可以再说一次吗？"
+            : "Oops! I didn't catch that. Can you say it again?";
+        await this.speak(context.connection, fallback);
+      } catch (speakErr) {
+        console.error("[onTurn] fallback speak failed:", speakErr);
+      }
+      return new ReadableStream<string>({
+        start(controller) {
+          controller.close();
+        }
+      });
+    }
   }
 
   async onCallStart(connection: Connection) {
@@ -313,13 +339,15 @@ Always follow these rules:
           ? "Welcome back! I am Buddy. Let's learn English again!"
           : "Hi! I am Buddy, your English teacher! Let's have fun with English!";
 
-    // The TTS language for the greeting is chosen by beforeSynthesize() from
-    // the connection's lang param, so a Chinese greeting is spoken by MeloTTS
-    // and an English greeting by Deepgram Aura — never mismatched.
+    // Speak the greeting in the right language. We set it here directly (and
+    // also in beforeSynthesize) so the bilingual TTS never mis-matches.
+    (this.tts as BilingualTTS).setLang(lang);
     await this.speak(connection, greeting);
   }
 
   async speakReminder(payload: { message: string }) {
+    // Reminders are always English.
+    (this.tts as BilingualTTS).setLang("en");
     await this.speakAll(`Reminder: ${payload.message}`);
   }
 }
