@@ -1,0 +1,38 @@
+/* Tailwind ignores node_modules by default, so we source Kumo for class extraction. */
+@source "../node_modules/@cloudflare/kumo/dist/**/*.{js,jsx,ts,tsx}";
+@import "tailwindcss";
+@import "@cloudflare/kumo/styles/tailwind";
+
+/* ===== Buddy kids theme =====
+   Bright, soft, large-type UI for 7-8 year old children. */
+.buddy-app {
+  font-size: 1.1rem;
+  background: linear-gradient(160deg, #fff7ed 0%, #eff6ff 50%, #f0fdf4 100%);
+}
+
+.buddy-card {
+  background: rgba(255, 255, 255, 0.9);
+  border-radius: 1.75rem;
+  box-shadow: 0 12px 40px rgba(99, 102, 241, 0.12);
+}
+
+.buddy-title {
+  font-size: 2rem;
+  font-weight: 800;
+  color: #f97316;
+  letter-spacing: 0.5px;
+}
+
+/* Oversized, pill-shaped buttons for little fingers. */
+.buddy-big-btn {
+  font-size: 1.3rem !important;
+  font-weight: 700;
+  padding: 0.9rem 1.6rem;
+  border-radius: 1.5rem;
+}
+
+/* Big, roomy transcript so kids can read along. */
+.buddy-transcript {
+  font-size: 1.25rem;
+  line-height: 1.9;
+}
