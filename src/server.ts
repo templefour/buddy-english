@@ -13,8 +13,7 @@ import { streamText, tool, isStepCount } from "ai";
 import { createWorkersAI } from "workers-ai-provider";
 import { z } from "zod";
 import {
-  createVoiceTranscriber,
-  getMissingSttProviderKey
+  createVoiceTranscriber
 } from "./stt-providers";
 import { BilingualTTS } from "./tts-providers";
 
@@ -56,12 +55,6 @@ export class MyVoiceAgent extends VoiceAgent<Env> {
   #activeSpeakerId: string | null = null;
 
   beforeCallStart(connection: Connection): boolean {
-    const missingKey = getMissingSttProviderKey(connection, this.env);
-    if (missingKey) {
-      connection.send(JSON.stringify({ type: "error", message: missingKey }));
-      return false;
-    }
-
     if (this.#activeSpeakerId && this.#activeSpeakerId !== connection.id) {
       connection.send(
         JSON.stringify({

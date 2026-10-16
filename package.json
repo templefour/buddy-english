@@ -9,12 +9,10 @@
     "types": "wrangler types env.d.ts --include-runtime false"
   },
   "dependencies": {
+    "@ai-sdk/react": "^4.0.0",
     "@cloudflare/kumo": "^2.6.0",
-    "@cloudflare/voice-assemblyai": "*",
-    "@cloudflare/voice-elevenlabs": "*",
-    "@cloudflare/voice-telnyx": "*",
     "@phosphor-icons/react": "^2.1.10",
-    "agents": "*",
+    "agents": "^0.28.0",
     "ai": "^7.0.0",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",

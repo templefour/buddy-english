@@ -1,45 +1,16 @@
 import { Surface } from "@cloudflare/kumo";
-import {
-  AssemblyAISettings,
-  DEFAULT_ASSEMBLYAI_KEYTERMS,
-  DEFAULT_ASSEMBLYAI_PROMPT,
-  getAssemblyAIQuery
-} from "./stt-settings/assemblyai";
-import {
-  ElevenLabsSettings,
-  getElevenLabsQuery
-} from "./stt-settings/elevenlabs";
-import { TelnyxSettings, getTelnyxQuery } from "./stt-settings/telnyx";
 import type { SttProvider, SttSettings } from "./stt-settings/types";
-import {
-  getWorkersAIQuery,
-  WorkersAISettings
-} from "./stt-settings/workers-ai";
+import { getWorkersAIQuery, WorkersAISettings } from "./stt-settings/workers-ai";
 
 export type { SttSettings } from "./stt-settings/types";
 
 export const DEFAULT_STT_SETTINGS: SttSettings = {
   provider: "workers-ai-flux",
-  assemblyaiMode: "balanced",
-  voiceFocus: "off",
-  assemblyaiLanguageCodes: "",
-  prompt: DEFAULT_ASSEMBLYAI_PROMPT,
-  keyterms: DEFAULT_ASSEMBLYAI_KEYTERMS,
-  telnyxEngine: "Telnyx",
-  telnyxModel: "",
-  language: "",
-  elevenlabsNoVerbatim: false,
-  elevenlabsFilterBackgroundAudio: false
+  keyterms: ""
 };
 
 export function getSttQuery(settings: SttSettings): Record<string, string> {
   switch (settings.provider) {
-    case "assemblyai":
-      return getAssemblyAIQuery(settings);
-    case "telnyx":
-      return getTelnyxQuery(settings);
-    case "elevenlabs":
-      return getElevenLabsQuery(settings);
     case "workers-ai-flux":
     case "workers-ai-nova-3":
       return getWorkersAIQuery(settings);
@@ -73,9 +44,6 @@ export function ProviderSettings({
         >
           <option value="workers-ai-flux">Workers AI Flux</option>
           <option value="workers-ai-nova-3">Workers AI Nova 3</option>
-          <option value="assemblyai">AssemblyAI Universal 3.5 Pro</option>
-          <option value="telnyx">Telnyx STT</option>
-          <option value="elevenlabs">ElevenLabs Scribe v2 Realtime</option>
         </select>
       </div>
 
@@ -87,27 +55,6 @@ export function ProviderSettings({
           {(settings.provider === "workers-ai-flux" ||
             settings.provider === "workers-ai-nova-3") && (
             <WorkersAISettings
-              settings={settings}
-              disabled={disabled}
-              update={update}
-            />
-          )}
-          {settings.provider === "assemblyai" && (
-            <AssemblyAISettings
-              settings={settings}
-              disabled={disabled}
-              update={update}
-            />
-          )}
-          {settings.provider === "telnyx" && (
-            <TelnyxSettings
-              settings={settings}
-              disabled={disabled}
-              update={update}
-            />
-          )}
-          {settings.provider === "elevenlabs" && (
-            <ElevenLabsSettings
               settings={settings}
               disabled={disabled}
               update={update}
