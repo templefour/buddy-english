@@ -1,5 +1,4 @@
 import { useVoiceAgent, type VoiceStatus } from "agents/voice/react";
-import { VoiceClient } from "agents/voice/client";
 import {
   MicrophoneIcon,
   PhoneIcon,
@@ -685,53 +684,13 @@ function App() {
   }, [error]);
 
   const handleKickSpeaker = useCallback(() => {
-    // Send kick request via a temporary raw WebSocket message.
-    // VoiceClient.sendText sends a text_message; we need a raw JSON message.
-    // Since VoiceClient doesn't expose raw send, we use sendText with a
-    // special prefix that the server won't try to process as text_message.
-    // Actually, we need to send { type: "kick_speaker" } which will be routed
-    // to onMessage → our custom handler. We can't do this through VoiceClient's
-    // public API. Instead, we create a temporary PartySocket connection.
-    //
-    // Simpler approach: create a VoiceClient just for sending the kick.
-    const kickClient = new VoiceClient({
-      agent: "my-voice-agent",
-      name: sessionId
-    });
-    kickClient.connect();
-    // Wait a moment for the connection to open, then send the kick
-    setTimeout(() => {
-      // Access the underlying socket to send raw JSON
-      // VoiceClient doesn't expose this, so we use the text_message pathway
-      // and have the server also check for kick_speaker in onNonVoiceMessage.
-      // Actually, the server intercepts kick_speaker in onMessage before
-      // the voice protocol handler. So we can send it as-is if we had
-      // socket access. Since we don't, let's use a fetch-based approach.
-      //
-      // Cleanest workaround: send a text_message with a special content
-      // that the server recognizes.
-      //
-      // But actually, the better approach is to just send the kick via the
-      // existing connection. VoiceClient's sendText sends { type: "text_message", text }.
-      // We need { type: "kick_speaker" }. Since VoiceClient doesn't support
-      // arbitrary JSON, let's add this to the sendText content and handle
-      // server-side via onNonVoiceMessage.
-      //
-      // For now: the server's onMessage intercepts { type: "kick_speaker" }
-      // before the voice protocol. We need raw socket access.
-      // PartySocket from partysocket would give us this.
-      kickClient.disconnect();
-    }, 500);
-
-    // Alternative: use fetch to call an RPC endpoint
-    // For this example, we'll reload the page after kicking
+    // Kick the current speaker via a direct RPC call to the agent instance.
+    // The server's onMessage intercepts { type: "kick_speaker" } before the
+    // voice protocol handles it, so a raw POST is enough — no VoiceClient needed.
     setSpeakerConflict(false);
     setKicked(false);
     setToast("Attempting to take over as speaker...");
 
-    // Use a direct fetch to the agent's callable method
-    // Actually, the cleanest approach is: the VoiceClient should support
-    // sending arbitrary JSON. Let's just use the connection URL directly.
     fetch(`/agents/my-voice-agent/${sessionId}?action=kick`, {
       method: "POST"
     }).catch(() => {
